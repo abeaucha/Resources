@@ -1,0 +1,280 @@
+---
+title: "Image Registration and Deformation-Based Morphometry"
+author: "Antoine Beauchamp, Ramy Ayoub, Darren Fernandes"
+date: "November 4th, 2019"
+output: 
+  html_document:
+    theme: paper
+    highlight: pygments
+    toc: true
+    number_sections: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      fig.align = 'center')
+library(knitr)
+library(png)
+```
+
+# Preface
+
+# Introduction
+
+Image registration is the process of transforming two or more images (or volumes) so that they are in alignment with one another. This is done to perform quantitative comparisons between the images. Image registration can be applied in a number of contexts. At MICe we use registration to study mesoscale differences in neuroanatomy using MRI scans. This is accomplished using a technique called **deformation-based morphometry (DBM)**. With DBM, we can compare morphological changes between different objects, e.g. mouse brains, by transforming or deforming one object to match another. This transformation from the first object to the second contains information about the ways in which the object had to change to match the second. Using these transformations, we can extract measures of comparison, like volumetric differences. The goal of image registration and DBM is to come up with as good a transformation as possible so that the difference between the final images is minimal.
+
+Image registration is built upon a rigorous mathematical foundation. However, this formalism makes assumptions that don’t hold in real life. Since it is impossible to generate a perfect registration, the goal in practice is to create a pipeline that is as robust as possible, in order to ensure success and minimize errors.  
+
+Image registration has three primary goals. Ordered from most general (i.e. not specific to mouse brain images or even brain images) to most specialized (i.e. applied to mouse brains here at MICe), they are:
+ 
+**1\. Establish point-by-point correspondence between images.** 
+
+In other words, we want to be able to map every unique point (i.e. pixel or voxel) in one image to a point in another image. The core goal of registration is to find correspondence between image features. 
+
+```{r eval=TRUE, echo=FALSE, out.width="60%", fig.cap="The white point in the central image is associated with corresponding points in the other four images"}
+include_graphics("Images/pointbypoint.png")
+```
+
+\  
+
+**2\. Create a high-quality consensus average.**
+
+A **consensus average** is a representative average image generated from all images being compared. When working with multiple images, we bring homologous points in all images together towards an average. Building a consensus average allows the idiosyncrasies of individual brains to be smoothed out. This average is used as the reference for image comparison. The consensus average is also preferable to individual MR images for visualizing quantitative maps over the brain.
+
+```{r eval=TRUE, echo=FALSE, out.width="40%", fig.align='center', fig.cap = "A coronal slice of a consensus average"}
+include_graphics("Images/consensusavg.png")
+```
+
+Though it is advantageous, it isn't necessary to build a consensus average. Another strategy for image comparison would be to select one of the individual MR scans as the reference and compare all other images to that image. If it was possible to perfectly identify point-by-point correspondence between all images, then we could use any of the images as a reference. This isn't the case in practice. Using a particular image as a reference will cause the idiosyncrasies of that image to propagate to all other images in the transformations. For example, if a reference image has an extra structure in the brain, this error will be propagated. Using a consensus average as the reference image allows us to smooth out these particularities. Another way to compare images would be to same all sets of pairwise transformations between images. However this is not very efficient. 
+
+
+\  
+
+**3\. Perform deformation-based morphometry.**
+
+Once point-by-point correspondence is established, we can extract measures of deformation indicating how each of the individual images is different from the consensus average. This information can be used to compute volumetric information.
+
+\  
+
+Following a successful registration, all three of these goals will have been accomplished. However, there is no real standard to assess when a registration is complete. It is always a good idea to examine the consensus average generated from the registration pipeline. If the average doesn’t look good, then you likely don’t have point-by-point correspondence. Point-by-point correspondence is usually inferred from the quality of the average rather than proven. Another way to perform a quality check is to look at the transformed individual images. 
+
+The following sections will go into the details of how we perform image registration and deformation-based morphometry. We begin by considering the case of pairwise registration. [Multi-image registration] will be discussed in later.
+
+***
+
+# Pairwise image registration
+
+
+As mentioned above, the goal of image registration is to align images together. With pairwise image registration we can accomplish this by transforming one image, which we call **the source**, to be in alignment with the second image, which we call **the target**. 
+
+<!-- INSERT IMAGE --> 
+```{r eval=TRUE, echo=FALSE, out.width="70%", fig.align='center'}
+include_graphics("Images/source_target.png")
+```
+
+How can we generate a good registration between these two images? The key is not to perform the entire registration at once, but rather to break the process down into pieces. Specifically, we begin by performing a rapid coarse alignment between images. The alignment is then refined using a series of more complicated transformations. At MICe, pairwise registration is performed using three steps:
+
+1. Alignment using **rigid transformations**
+2. Alignment using **affine transformations**
+3. Alignment using **non-linear transformations**
+
+We discuss each of these in turn. 
+
+
+## Coarse alignment using rigid transformations
+
+In order to align two images together, the first, easiest thing to do is to make sure that the two images are *roughly* in the same orientation and at the same position in space. This is accomplished by rotating and translating the image. Collectively, these comprise a **rigid transformation**, i.e. a linear transformation that preserves volume elements. At MICe we obtain a rigid alignment between images using **least squares optimization with 6 degrees of freedom (LSQ6)**. This algorithm finds the optimal rigid transformation with 6 degrees of freedom that aligns the source with the target. The six degrees of freedom in the transformation correspond to three rotations (about $x$, $y$, and $z$) and three translations (along $x$, $y$, and $z$). Once the optimal transformation has been identified, it is applied to the source image to bring it into alignment with the target. Conceptually, this just means that the source image is rotated and translated until it is in optimal alignment with the target image:
+
+```{r eval=TRUE, echo=FALSE, out.width="70%"}
+include_graphics("Images/source_lsq6_transform.png")
+```
+
+As mentioned previously, this step generates a rough alignment between the target and source. This can be seen if we try to build a consensus average using the transformed source image and the target. The overlayed image is blurry and the structures aren't nicely resolved. 
+
+```{r eval=TRUE, echo=FALSE, out.width="90%"}
+include_graphics("Images/sourcelsq6_target_overlay.png")
+```
+
+This is a good first step, but to obtain better point-by-point correspondence and build a nicer average, the alignment needs to be refined. 
+
+
+## Refining the alignment with affine transformations
+
+Following coarse alignment using a rigid transformation, the source and target images are registered together more finely using an **affine transformation**. As with rigid transformations, affine transformations are linear transformations that affect *every voxel in the same way*. However, affine transformations do not preserve volume elements. This is because affine transformations allow for **scaling and shearing**, in addition to rotation and translation:
+
+```{r eval=TRUE, echo=FALSE, out.width="90%"}
+include_graphics("Images/scaling_shearing.png")
+```
+
+Affine transformations do however preserve **parallelism**, meaning that lines that are parallel prior to the transformation will remain parallel afterwards. The optimal affine transformation is identified using **least squares optimization with 12 degrees of freedom (LSQ12)**. These twelve degrees of freedom include the three rotations and translations mentioned previously, but also scaling along each axis and shearing across each pair of axes. Alignment using LSQ12 is performed using the LSQ6-resampled, i.e. LSQ6-transformed, image as the source. This means that the bulk of the alignment has already been performed. The rotations and translations performed here will serve to refine the coarse alignment that was obtained using LSQ6. The source image will also be scaled to the appropriate size, and any necessary shears will be applied. Once the LSQ6-transformed source image is transformed using the optimal LSQ12 transformation, the source and target will actually be really well aligned. 
+
+```{r eval=TRUE, echo=FALSE, out.width="90%"}
+include_graphics("Images/sourcelsq12_target_overlay.png")
+```
+
+In fact it is possible to obtain excellent point-by-point correspondence simply by using affine transformations. In mice, a lot of brain differences come down to differences in overall brain size, which are resolved following affine transformations. However, affine transformations are limited in their ability to generate a highly precise alignment between images. This is because they influence all voxels in the same way. Whatever changes are applied to one part of the image must also be applied to all other parts. One can easily imagine a scenario in which aligning a given region of the brain, e.g. the cerebellum, with the target would take another region of the brain, e.g. the olfactory bulbs, out of alignment. In order to achieve perfect alignment between images, we need to allow different parts of the image to be transformed in different ways. This requires the use of **non-linear transformations**.
+
+
+## Precise alignment using non-linear transformations
+
+While rigid and affine transformations have embedded constraints regarding how voxels in the image can move, non-linear transformations are extremely flexible. In fact, non-linear transformations allow every voxel to be transformed independently of the others. Though this flexibility is necessary to generate a precise alignment between images, it can also be problematic when applied naively. Specifically, the leniency of non-linear transformations makes it difficult to find an optimal solution to the registration problem. Moreover, the solutions obtained are not guaranteed to be physical. For instance, if every voxel in the image is allowed to move independently of the others, it is possible to obtain excellent point-by-point correspondence by transforming both the source and target to a greyscale gradient.
+
+```{r eval=TRUE, echo=FALSE, out.width="90%"}
+include_graphics("Images/registration_greyscale.png")
+```
+
+This technically solves the registration problem with high accuracy but it obviously isn't what we want. Though the images are registered together, all physical information is lost. In order to generate a solution that is both accurate and physical, we need to constrain the way in which voxels can be transformed. Part of this process has already been accomplished with the rigid and affine transformations discussed above. With the images in near-perfect alignment, it is possible to apply a constrained non-linear transformation to smooth out the remaining details. In particular, three constraints are considered: 
+
+1. **Elastic regularization**: This constrains how flexible, or elastic, the registration should be. Specifically, this criterion constrains how far voxels can move from their original location. This is a natural constraint to impose. Most of the aligment has already resolved following LSQ12, so it is reasonable to expect that the final adjustments will be highly localized. For instance, we don't expect a voxel in the cerebellum to move all the way to the forebrain. 
+2. **Spatial regularization**: This criterion constrains voxels to be reasonably similar to neighbouring voxels. This ensures physicality because in the majority of cases we don't expect to have sudden shifts in contrast between neighbouring voxels. 
+3. **Invertibility**: This constrains the optimal transformation to be invertible. That is, the transformation that maps the source on to the target can be inverted to map the target on to the source. This constraint isn't necessary, but it arises naturally from the two previous constraints. 
+
+While alignment using non-linear registration can be performed on the images themselves, it can also be performed on the gradient map of the images, i.e. the edges. To generate a better alignment, the intensity images and the gradient images can be registered simultaneously. Different weights can be applied to each class of image in the optimization process.  
+
+```{r eval=TRUE, echo=FALSE, out.width="50%", fig.align='center', fig.cap="Intensity and gradient (red) images"}
+include_graphics("Images/gradient.png")
+```
+
+Following non-linear registration the source and target images will be in near-perfect alignment. This completes the registration process. In doing so, we have established point-by-point correspondence between images, and can create a high-quality consensus average. The remaining step is to use the optimal LSQ6, LSQ12, and non-linear transformations to extract volumetric information in order to make quantitative comparisons between the source and target. 
+
+
+***
+
+# From image registration to deformation-based morphometry
+
+In order to understand how deformation-based morphometry is used to extract volumetric measures from the transformations described above, it is important to review how MR images are stored and described. Since MR images are acquired in three dimensions, we can store them in a 3-dimensional array, i.e. a **data cube**:
+
+```{r eval=TRUE, echo=FALSE, out.width="50%", fig.align='center', fig.cap="Source: https://pythonhosted.org/cubes/introduction.html"}
+include_graphics("Images/datacube_edit.png")
+```
+
+Each element of this array represents a sampled voxel, and the value stored in a given element is the intensity value of the voxel. Each dimension along the array represents a dimension in real space, i.e. $x$, $y$, or $z$. Any element of the array can be accessed using a set of three indices, e.g. `myArray[i, j, k]`. The set of indices $[i, j, k]$ represents the **voxel coordinates** of a given voxel. Since the MR image is a digital representation of an object that exists in the real world, each voxel is associated with a position in real space. Thus each voxel in the array has an associated set of **world coordinates**, $[x, y, z]$. 
+
+So how does this relate to image registration and deformation-based morphometry? Previously we discussed how various transformations can be applied to align our images. What this means in practice is that the transformations are applied to *every voxel in an image*. In particular, the transformations are represented as mathematical rules that *act on the world coordinates* of individual voxels. Generally, a transformation can be described as a function that takes a voxel's initial coordinates, $\vec{x} = [x, y, z]$, and returns its new coordinates, $\vec{X} = [X, Y, Z]$. This is exactly described by a **vector field** over the image:
+
+$$\vec{X}(\vec{x}) = \left[X(\vec{x}), Y(\vec{x}), Z(\vec{x}) \right] = \left[X(x, y, z), Y(x, y, z), Z(x, y, z) \right] \quad .$$
+
+The components of the vector field, i.e. $X(\vec{x})$, $Y(\vec{x})$, and $Z(\vec{x})$, describe the voxel's new position in each dimension. Each of the transformations discussed above can be described in this way. However, the specific form of the mapping $\vec{X}(\vec{x})$ will depend on the type of transformation under consideration. We'll begin by considering the general case of non-linear transformations before moving on to the specific cases of rigid and affine transformations, which are instances of linear transformations.
+
+\  
+
+**Non-linear transformations**
+
+In non-linear registration, we allow all voxels to move independently of the others, subject to some regularizing constraints. As mentioned above, each voxel begins at some set of world coordinates $\vec{x} = [x, y, z]$ and moves to a new location $\vec{X} = [X, Y, Z]$. This is described by the vector field $\vec{X}(\vec{x})$. The "non-linear" designation of non-linear transformations means that the coordinate functions of the vector field, $X(\vec{x})$, $Y(\vec{x})$ and $Z(\vec{x})$, can take on any functional form. The functions aren't restricted to be linear functions of $\vec{x}$. We do apply regularizing constraints, as discussed previously, but these constraints don't impose linearity. Here is an example of a non-linear vector field in two dimensions, generated using $\vec{X}(\vec{x}) = [X(\vec{x}), Y(\vec{x})] = [\sin(y), \sin(x)]$: 
+
+```{r eval=TRUE, echo=FALSE, out.width="30%", fig.align='center', fig.cap = "Source: https://en.wikipedia.org/wiki/Vector_field"}
+include_graphics("Images/VectorField.png")
+```
+
+
+
+
+
+<!-- MOVE THIS STUFF TO SECTION ECODING TRANSFORMATIONS
+
+Rather than describing this change in terms of the new position $\vec{X}(\vec{x})$, we can describe instead *how the voxel had to move* to get to the new position. This is done using a **displacement field** or **deformation field**, $\vec{V}(\vec{x})$. At each world coordinate $\vec{x}$, this displacement field assigns a displacement vector, $\vec{V} = [V_x, V_y, V_z]$, that points from the voxel's initial location to its new location:
+
+```{r eval=TRUE, echo=FALSE, out.width="40%", fig.align='center'}
+include_graphics("Images/displacement.png")
+```
+
+The deformation field is of course also a vector field and is related to $\vec{X}(\vec{x})$ in the following way: 
+
+$$\vec{X}(\vec{x}) = \vec{x} + \vec{V}(\vec{x}) \quad .$$
+
+The components of $\vec{V}(\vec{x})$ describe the displacement of the voxel along a given axis. Here is an example of a displacement field in two dimensions, generated using $\vec{V}(\vec{x}) = [\sin(y), \sin(x)]$: 
+
+```{r eval=TRUE, echo=FALSE, out.width="30%", fig.align='center', fig.cap = "Source: https://en.wikipedia.org/wiki/Vector_field"}
+include_graphics("Images/VectorField.png")
+```
+
+-->
+
+The non-linear transformation is completely characterized by the vector field. Given the initial position of any voxel in the image, we can indicate where it will be following the transformation. This function contains a lot of information however. In essence we have three maps over the image, one for each component of the vector field: 
+
+```{r eval=TRUE, echo=FALSE, out.width="70%", fig.align='center'}
+include_graphics("Images/vectorfieldmaps.png")
+```
+
+Each map describes the transformation along one axis. As you might appreciate, this doesn't provide a simple and intuitive way to understand how the source image was deformed to match the target image. It would be ideal to instead have a *single map* that describes how every voxel in the source had to be deformed to meet the target. In fact, we can build such a map by looking at the **Jacobian determinants** of the transformation. To compute the Jacobian determinants, we first have to compute the **Jacobian matrix** associated with the transformation $\vec{X}(\vec{x})$ (named after [Carl Gustav Jacob Jacobi](https://en.wikipedia.org/wiki/Carl_Gustav_Jacob_Jacobi), a German mathematician from the 19th century). The Jacobian matrix is built by taking the *partial derivatives* of the components of the vector field $\vec{X}(\vec{x})$ along each dimension:  
+
+$$\mathbf{J}(\vec{x}) = \begin{bmatrix} 
+\frac{\partial X(\vec{x})}{\partial x} & \frac{\partial X(\vec{x})}{\partial y} & \frac{\partial X(\vec{x})}{\partial z} \\
+\frac{\partial Y(\vec{x})}{\partial x} & \frac{\partial Y(\vec{x})}{\partial y} & \frac{\partial Y(\vec{x})}{\partial z} \\
+\frac{\partial Z(\vec{x})}{\partial x} & \frac{\partial Z(\vec{x})}{\partial y} & \frac{\partial Z(\vec{x})}{\partial z}
+\end{bmatrix} \quad . $$
+
+
+The Jacobian effectively plays the role of a first-order derivative for the transformation. As such, it describes the behaviour of the transformation for a very very small (infinitesimal) region of space around $\vec{x}$. Since the Jacobian matrix is defined at every world coordinate, it forms a **tensor field** over the image. 
+
+In building this object, we seem to have made things more complicated: Instead of having three individual maps over the image, we now have nine. However, since the Jacobian is a *square matrix*, we can compute 
+its [determinant](https://en.wikipedia.org/wiki/Determinant), i.e. the Jacobian determinant. The determinant of a matrix of numbers is a *single value* that encodes certain properties of the transformation represented by the matrix. Since the Jacobian matrix is tensor field, the determinant of the matrix is also a function. In particular, it forms a **scalar field**, $\det[\mathbf{J}(\vec{x})] \equiv g(\vec{x}) = g(x, y, z)$, which returns a single value at every world coordinate. This is what we want. The Jacobian determinant field provides a single map that describes how every voxel in the source was deformed to align with the target.
+
+```{r eval=TRUE, echo=FALSE, out.width="90%", fig.align='center'}
+include_graphics("Images/determinant.png")
+```
+
+The value of the determinant field at a given point can be interpreted as a **scaling factor** applied to a volume element or voxel. So a value of 1 means that the volume of the voxel is unchanged, a value greater than 1 indicates expansion, and a value between 0 and 1 indicates contraction. In theory, the value of the determinant at any given voxel can be anywhere between $-\infty$ and $\infty$. A negative determinant would indicate that a volume element, i.e. voxel, has been *inverted*. In practice, this does not happen with the image registrations that we perform; the determinant is always positive. If the image registration process generates some negative values for the determinant, it typically indicates that something went wrong. 
+
+Note that at MICe, we typically work with the log-transformed determinants, $\ln[g(\vec{x})]$. This symmetrizes the range of values for contraction and expansion, such that negative values indicate contraction, positive values indicate expansion, and a value of 0 indicates no change. 
+
+**Aside**: Khan Academy offers some useful short lectures for understanding and interpreting the [Jacobian matrix](https://www.khanacademy.org/math/multivariable-calculus/multivariable-derivatives/jacobian/v/the-jacobian-matrix) and the [Jacobian determinant](https://www.khanacademy.org/math/multivariable-calculus/multivariable-derivatives/jacobian/v/the-jacobian-determinant). 
+
+\ 
+
+**Rigid and affine transformations**
+
+Rigid (LSQ6) and affine (LSQ12) transformations are **linear transformations**. Linear transformations are also fundamentally described by a vector field $\vec{X}(\vec{x})$, however they can be simplified in a neat fashion. The "linear" denomination of linear transformations means that the coordinate functions of the vector field are **linear functions** of the world coordinates, i.e.
+
+$$
+X(x, y, z) = j_{xx}x + j_{xy}y + j_{xz}z + b_x \\
+Y(x, y, z) = j_{yx}x + j_{yy}y + j_{yz}z + b_y \\
+Z(x, y, z) = j_{zx}x + j_{zy}y + j_{zz}z + b_z \quad .
+$$
+
+Here the values $b_i$ represent constant terms that play the role of an intercept. The values $j_{ij}$ are constant terms that play the role of a slope for each variable. Since the vector field is constrained to take this specific form, we can actually express it more elegantly using matrix algebra: 
+
+$$\vec{X}(\vec{x}) = \mathbf{J} \cdot \vec{x} + \vec{b} $$
+
+Or explicitly: 
+
+$$\begin{bmatrix} X(x, y, z) \\ Y(x, y, z) \\ Z(x, y, z) \end{bmatrix} = 
+\begin{bmatrix} 
+j_{xx} & j_{xy} & j_{xz} \\ 
+j_{yx} & j_{yy} & j_{yz} \\
+j_{zx} & j_{zy} & j_{zz}
+\end{bmatrix} \begin{bmatrix}
+x \\ y \\ z
+\end{bmatrix} + 
+\begin{bmatrix} b_x \\ b_y \\ b_z \end{bmatrix} $$
+
+The vector $\vec{b}$ and matrix $\mathbf{J}$ are populated by numbers and so have no functional dependence on $\vec{x}$. All the functional dependence arises in the linear relationship with $\vec{x}$. Notice that there are twelve values that we haven't specified in $\vec{b}$ and $\mathbf{J}$. These are exactly the twelve degrees of freedom that are optimized in LSQ12 registration. In fact, the intercept vector $\vec{b}$ represents the translation of the image, whereas the matrix $\mathbf{J}$ contains all the information about rotations, shears and scales. The matrix equation above defines an affine transformation. Another nice thing about linear transformations is that the Jacobian matrix is actually just the matrix of numbers, $\mathbf{J}$. This can be verified easily by computing the partial derivatives. Since this matrix has no functional dependence on $\vec{x}$, the values of the matrix are the same across the entire image. This technically still forms a tensor field, but a tensor field with a constant value across space. Of course we can also compute the determinant of the Jacobian matrix. Since the matrix is constant, the Jacobian determinant will also be constant. However, the interpretation of the value of the determinant is still the same as described for non-linear transformations. The difference here is that the same scaling factor will be applied to all volumes across the entire image, rather than allowing for local differences in deformation. 
+
+What about rigid transformations? A rigid transformation is actually just an affine transformation with $\det[\mathbf{J}] = 1$. This means that a rigid transformation is built to preserve volume elements and essentially means that the matrix $\mathbf{J}$ only describes rotations. With the addition of $\vec{b}$, translations are also possible. 
+
+\ 
+
+**Summary**
+
+
+
+
+***
+
+# Multi-image registration
+
+
+# Appendix
+
+## Bootstrap init model
+
+## Transformation encoding
+
+
+
+
+
+
+
+
