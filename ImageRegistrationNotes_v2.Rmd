@@ -151,7 +151,7 @@ include_graphics("Images/datacube_edit.png")
 
 Each element of this array represents a sampled voxel, and the value stored in a given element is the intensity value of the voxel. Each dimension along the array represents a dimension in real space, i.e. $x$, $y$, or $z$. Any element of the array can be accessed using a set of three indices, e.g. `myArray[i, j, k]`. The set of indices $[i, j, k]$ represents the **voxel coordinates** of a given voxel. Since the MR image is a digital representation of an object that exists in the real world, each voxel is associated with a position in real space. Thus each voxel in the array has an associated set of **world coordinates**, $[x, y, z]$. 
 
-So how does this relate to image registration and deformation-based morphometry? Previously we discussed how various transformations can be applied to align our images. What this means in practice is that the transformations are applied to *every voxel in an image*. In particular, the transformations are represented as mathematical rules that *act on the world coordinates* of individual voxels. Generally, a transformation can be described as a function that takes a voxel's initial coordinates, $\vec{x} = [x, y, z]$, and returns its new coordinates, $\vec{X} = [X, Y, Z]$. This is exactly described by a **vector field** over the image:
+So how does this relate to image registration and deformation-based morphometry? Previously we discussed how various transformations can be applied to align our images. What this means in practice is that the transformations are applied to *every voxel in an image*. In particular, the transformations are represented as mathematical rules that *act on the world coordinates* of individual voxels. Generally, a transformation can be described as a multivariate function that takes a voxel's initial coordinates, $\vec{x} = [x, y, z]$, and returns its new coordinates, $\vec{X} = [X, Y, Z]$. This is exactly described by a **vector field** over the image:
 
 $$\vec{X}(\vec{x}) = \left[X(\vec{x}), Y(\vec{x}), Z(\vec{x}) \right] = \left[X(x, y, z), Y(x, y, z), Z(x, y, z) \right] \quad .$$
 
@@ -191,7 +191,7 @@ include_graphics("Images/VectorField.png")
 
 -->
 
-The non-linear transformation is completely characterized by the vector field. Given the initial position of any voxel in the image, we can indicate where it will be following the transformation. This function contains a lot of information however. In essence we have three maps over the image, one for each component of the vector field: 
+The non-linear transformation is completely characterized by the vector field. Given the initial position of any voxel in the image, we can indicate where it will be following the transformation. This function contains a lot of information however. In essence we have *three maps over the image*, one for each component of the vector field: 
 
 ```{r eval=TRUE, echo=FALSE, out.width="70%", fig.align='center'}
 include_graphics("Images/vectorfieldmaps.png")
@@ -257,6 +257,17 @@ What about rigid transformations? A rigid transformation is actually just an aff
 
 **Summary**
 
+We've covered a lot of ground so far, so it might be helpful to have a quick summary about how all of this is tied together. 
+
+In the case of pairwise image registration, we aim to transform, i.e. deform, the source image so that it is aligned with the target image (or vice versa). Rather than doing this all at once, we break the process down into three steps of transformations: 1. Rigid transformation with LSQ6, 2. Affine transformation with LSQ12, and 3. Non-linear transformation. Rigid transformations are special linear transformations that only allow for translation and rotation of the source image. Affine transformations are linear transformations that additionally allow for scaling and shearing of the source image. Finally, non-linear transformations are general coordinate transformations that allow voxels to move independently of the other. Following these three transformations, the source and target images will be in near-perfect alignment. 
+
+In order to make quantitative comparisons between the images, we have to consider the mathematics of the transformations. The quantity that we are interested in is the Jacobian determinant scalar field associated with the transformation (note that this is a choice and not the only quantity that can be used to describe morphological change). The Jacobian determinant describes how volume elements contract or expand following a transformation. This field is computed from the Jacobian matrix of the transformation. 
+
+Rigid (LSQ6) and affine (LSQ12) transformations are linear transformations, so the Jacobian matrix is simply the rotation/shear/scaling matrix of the transformation. Since this is a constant matrix, i.e. no spatial dependence, the Jacobian determinant is also constant. This single value describes how all voxels change following the linear transformation. Keep in mind that rigid transformations have a determinant of 1 by definition and so don't induce volume changes. 
+
+In the more complicated and general case of non-linear transformations, the Jacobian matrix is computed from the partial derivatives of the vector field describing the transformation. In general the Jacobian matrix forms a tensor field that varies over the image, and so the Jacobian determinant will be a scalar field that varies over the image. Rather being a single value that describes how all volumes changes across the image, the Jacobian determinant field describes how individual volume elements change at different positions in the image. 
+
+The determinant field calculated from the transformations allows us to analyze how volumes in the source image compare to volumes in the target image. In this way, we can examine changes in brain morphology. 
 
 
 
