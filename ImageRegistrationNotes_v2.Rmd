@@ -1,7 +1,7 @@
 ---
 title: "Image Registration and Deformation-Based Morphometry"
 author: "Antoine Beauchamp, Ramy Ayoub, Darren Fernandes"
-date: "November 4th, 2019"
+date: "November 15th, 2019"
 output: 
   html_document:
     theme: paper
@@ -9,6 +9,7 @@ output:
     toc: true
     number_sections: true
     toc_float: true
+    css: ImageRegistrationNotes.css
 ---
 
 ```{r setup, include=FALSE}
@@ -258,11 +259,11 @@ What about rigid transformations? A rigid transformation is actually just an aff
 
 We've covered a lot of ground so far, so it might be helpful to have a quick summary about how all of this is tied together. 
 
-In the case of pairwise image registration, we aim to transform, i.e. deform, the source image so that it is aligned with the target image (or vice versa). Rather than doing this all at once, we break the process down into three steps of transformations: 1. Rigid transformation with LSQ6, 2. Affine transformation with LSQ12, and 3. Non-linear transformation. Rigid transformations are special linear transformations that only allow for translation and rotation of the source image. Affine transformations are linear transformations that additionally allow for scaling and shearing of the source image. Finally, non-linear transformations are general coordinate transformations that allow voxels to move independently of the other. Following these three transformations, the source and target images will be in near-perfect alignment. 
+In the case of pairwise image registration, we aim to transform, i.e. deform, the source image so that it is aligned with the target image (or vice versa). Rather than doing this all at once, we break the process down into three transformations: 1. A rigid transformation with LSQ6, 2. an affine transformation with LSQ12, and 3. a regularized non-linear transformation. Rigid transformations are special linear transformations that only allow for translation and rotation of the source image. Affine transformations are general linear transformations that allow for scaling and shearing of the source image, in addition to rotation and translation. Finally, non-linear transformations are general coordinate transformations that allow voxels to move independently of one another. Following these three transformations, the source and target images will be in near-perfect alignment. 
 
-In order to make quantitative comparisons between the images, we have to consider the mathematics of the transformations. The quantity that we are interested in is the Jacobian determinant scalar field associated with the transformation (note that this is a choice and not the only quantity that can be used to describe morphological change). The Jacobian determinant describes how volume elements contract or expand following a transformation. This field is computed from the Jacobian matrix of the transformation. 
+In order to make quantitative comparisons between the images, we have to consider the mathematics of the transformations used to align the images. The quantity that we are interested in is the Jacobian determinant scalar field associated with the transformation (note that *this is a choice* and not the only quantity that can be used to describe morphological change). The Jacobian determinant describes how volume elements contract or expand following a transformation. This field is computed from the Jacobian matrix of the transformation.
 
-Rigid (LSQ6) and affine (LSQ12) transformations are linear transformations, so the Jacobian matrix is simply the rotation/shear/scaling matrix of the transformation. Since this is a constant matrix, i.e. no spatial dependence, the Jacobian determinant is also constant. This single value describes how all voxels change following the linear transformation. Keep in mind that rigid transformations have a determinant of 1 by definition and so don't induce volume changes. 
+Rigid (LSQ6) and affine (LSQ12) transformations are linear transformations, so the Jacobian matrix is simply the rotation/shear/scaling matrix of the transformation. Since this is a constant matrix, i.e. it has no spatial dependence, the Jacobian determinant is also constant. This single value describes how all voxels change following the linear transformation. Keep in mind that rigid transformations have a determinant of 1 by definition and so don't induce volume changes. 
 
 In the more complicated and general case of non-linear transformations, the Jacobian matrix is computed from the partial derivatives of the vector field describing the transformation. In general the Jacobian matrix forms a tensor field that varies over the image, and so the Jacobian determinant will be a scalar field that varies over the image. Rather being a single value that describes how all volumes changes across the image, the Jacobian determinant field describes how individual volume elements change at different positions in the image. 
 
@@ -273,6 +274,18 @@ The determinant field calculated from the transformations allows us to analyze h
 ***
 
 # Multi-image registration
+
+Our exploration of image registration has so far been focused on the problem of aligning and comparing two images. In general, we would like to be able to compare an arbitrary number of brain images in order to perform statistical analyses across groups. The framework for image registration and deformation-based morphometry that was laid out in the previous sections can be applied to the problem of multi-image registration. However, the pipeline must be modified to account for the greater number of images. 
+
+One of the central considerations of multi-image registration is the choice of **reference space**. The reference space is the space of the image to which all other images are being compared. In the special case of pairwise image registration, the choice of reference space is trivial. It can easily be chosen to be either the space of the source image or the target. In multi-image registration, the choice of reference space has a greater impact on the outcome of the registration. As discussed in the [Introduction], any given image in the set of images can be chosen as the reference. However this isn't an optimal choice since 1. all morphometric information will be in reference to this image, and 2. any idiosyncrasies of the image will propagate through the registration and influence the outcome. As a result, the consensus average plays a more important role in multi-image registration; the reference space is typically chosen to be the space of the consensus average. 
+
+In the following Sections, we will discuss the process of aligning multiple brain images together in order to generate a high-quality consensus average and associated space, as well as to use deformation-based morphometry across brains.
+
+## LSQ6 registration and initial models
+
+## Pairwise LSQ12 registration
+
+## Iterative non-linear registration 
 
 
 # Appendix
