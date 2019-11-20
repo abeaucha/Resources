@@ -301,6 +301,11 @@ However, we prefer to perform our analyses in a coordinate system that is rotate
 
 This coordinate system is known as **standard space**. We can also call it **MICe space**. This is simply a choice of convention that corresponds to the orientation in which human scans are acquired. 
 
+
+```{r eval=TRUE, echo=FALSE, out.width="70%"}
+include_graphics("Images/native_standard.png")
+```
+
 Thus in LSQ6 registration, all individual brain images are rigidly aligned to an appropriate initial model. 
 
 
