@@ -283,7 +283,25 @@ In the following Sections, we will discuss the process of aligning multiple brai
 
 ## LSQ6 registration and initial models
 
-As discussed in the Section on [Pairwise image registration], the purpose of the rigid LSQ6 transformation is to perform a coarse alignment of the images. In the case of multi-image registration, it isn't obvious what the target of the alignment should be. The consensus average space has not yet been constructed and so obviously cannot be used as the target. In practice, we use what is called an **initial model** (colloquially called "init model"). The initial model is a target brain and serves as a representation of the orientation in which we prefer to perform our analyses.     
+When the mouse brain images are reconstructed from $k$-space following acquisition, they will all be in slightly different orientations. As discussed in the Section on [Pairwise image registration], the purpose of the rigid LSQ6 transformation is to perform a coarse alignment of the images. In the case of multi-image registration, it isn't obvious what the target of this initial alignment should be. The consensus average space has not yet been constructed and so obviously cannot be used as the target. In practice, we use what is called an **initial model** (colloquially called "init model"). The initial model is a target brain image and serves to define a space towards which to align the individual images. 
+
+The initial model serves an additional purpose: It is used to define a transformation between the coordinate system in which the images are acquired, and the coordinate system in which we prefer to perform our analyses. To elaborate, when the mouse brains are scanned in the MRI scanner, the images are acquired in a coordinate system that is defined for the scanner being used. This coordinate system is known as **scanner space** or **native space** (native meaning that it is the space in which the images were "born"). In native space, the anatomical planes are aligned such that 
+
+
+* Coronal: $x$-axis
+* Sagittal: $y$-axis
+* Transverse: $z$-axis
+
+
+However, we prefer to perform our analyses in a coordinate system that is rotated by 90 degrees about the $z$-axis, such that
+
+* Coronal: $y$-axis
+* Sagittal: $x$-axis
+* Transverse: $z$-axis
+
+This coordinate system is known as **standard space**. We can also call it **MICe space**. This is simply a choice of convention that corresponds to the orientation in which human scans are acquired. 
+
+Thus in LSQ6 registration, all individual brain images are rigidly aligned to an appropriate initial model. 
 
 
 ## Pairwise LSQ12 registration
