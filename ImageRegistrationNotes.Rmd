@@ -1,7 +1,7 @@
 ---
 title: "Image Registration and Deformation-Based Morphometry"
 author: "Antoine Beauchamp, Ramy Ayoub, Darren Fernandes"
-date: "November 22nd, 2019"
+date: "November 23rd, 2019"
 output: 
   html_document:
     theme: paper
@@ -356,12 +356,21 @@ Once all individual images are transformed into this central space using these a
 
 ## Iterative non-linear registration 
 
+The final step in the pipeline for multi-image registration is to perfect the alignment of all images to the consensus average space using non-linear registration. Here the LSQ12 consensus average is used as the target for the registration. This step in pipeline is performed *iteratively* in order to refine the alignment of all images to the consensus average space, and to generated a consensus average of higher quality. All images are first aligned to the LSQ12 consensus average using regularized non-linear transformations. These images are then averaged to the generate the first non-linear consensus average, called "nlin1". The individual images (which are now in LSQ12 consensus average space) are then aligned non-linearly to the "nlin1" consensus average space. A new consensus average is constructed, called "nlin2". Finally, the process is repeated once more to generated a third and final consensus average, "nlin3". At the end of this process, all images will be in alignment with the "nlin3" consensus average space. Additionally we will be in possession of a consensus average of very high quality. 
+
+## Deformation-based morphometry in multi-image registration
+
+As with pairwise image registration, the quantitative map of interest following multi-image registration is the Jacobian determinant field. However a key difference in this case is that the Jacobians describe the volume differences between the individual brains and the consensus average, rather than between any given pair of brains. Thus voxel volumes that are smaller compared to the consensus average will have positive log-determinants, indicating expansion, while volumes that are larger will have negative log-determinants, indicating contraction. Typically, the Jacobian determinants are *inverted* to indicate how much the consensus average must be expanded or contracted to match an individual brain image. 
+
+
+# Conclusion
+
 
 # Appendix
 
-## Creating new inital models
+## Encoding and storing transformations
 
-## Encoding linear and non-linear transformations
+## Creating new inital models
 
 ## Resampling
 
