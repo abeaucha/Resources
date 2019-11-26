@@ -1,7 +1,7 @@
 ---
 title: "Image Registration and Deformation-Based Morphometry"
 author: "Antoine Beauchamp, Ramy Ayoub, Darren Fernandes"
-date: "November 23rd, 2019"
+date: "November 26th, 2019"
 output: 
   html_document:
     theme: paper
@@ -362,9 +362,12 @@ The final step in the pipeline for multi-image registration is to perfect the al
 
 As with pairwise image registration, the quantitative map of interest following multi-image registration is the Jacobian determinant field. However a key difference in this case is that the Jacobians describe the volume differences between the individual brains and the consensus average, rather than between any given pair of brains. Thus voxel volumes that are smaller compared to the consensus average will have positive log-determinants, indicating expansion, while volumes that are larger will have negative log-determinants, indicating contraction. Typically, the Jacobian determinants are *inverted* to indicate how much the consensus average must be expanded or contracted to match an individual brain image. 
 
+***
 
 # Conclusion
 
+
+***
 
 # Appendix
 
